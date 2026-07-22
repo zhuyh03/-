@@ -1,5 +1,6 @@
 import * as readline from "readline";
 import type { ToolDef } from "./index.js";
+import { GlobalCallbacks } from "./callbacks.js";
 
 export const askUserTool: ToolDef = {
   name: "ask_user",
@@ -23,6 +24,16 @@ export const askUserTool: ToolDef = {
       return "没有问题需要询问。";
     }
 
+    // ── Web 模式 ──────────────────────────────────────────────
+    if (GlobalCallbacks.askUser) {
+      const result = await GlobalCallbacks.askUser(questions);
+      if (!result || result.trim().toLowerCase() === "skip") {
+        return "用户选择跳过问答，请根据已有信息自主决策。";
+      }
+      return "用户回复：\n\n" + result;
+    }
+
+    // ── CLI 模式 ──────────────────────────────────────────────
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -36,14 +47,12 @@ export const askUserTool: ToolDef = {
     for (let i = 0; i < questions.length; i++) {
       if (skipped) break;
 
-      // 同时等待用户输入或 stdin 关闭（管道场景）
       const answer = await new Promise<string>((resolve) => {
         let settled = false;
         const done = (val: string) => {
           if (!settled) { settled = true; resolve(val); }
         };
         rl.question(`\n  Q${i + 1}: ${questions[i]}\n  > `, done);
-        // 管道 EOF 时自动降级为 skip
         rl.on("close", () => done("skip"));
       });
 
@@ -60,7 +69,6 @@ export const askUserTool: ToolDef = {
     if (answers.length === 0) {
       return "用户选择跳过问答，请根据已有信息自主决策。";
     }
-
     return "用户回复：\n\n" + answers.join("\n\n");
   },
 };

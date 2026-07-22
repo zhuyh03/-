@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { ToolDef } from "./index.js";
+import { currentSignal } from "../agents/agent.js";
 
 function llm() {
   return new OpenAI({
@@ -53,7 +54,7 @@ export const analyzeMarketTool: ToolDef = {
       max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-    });
+    }, { signal: currentSignal });
 
     const text = res.choices[0]?.message?.content || "";
     // 直接返回 JSON 给 Agent
@@ -69,7 +70,8 @@ export const analyzeMarketTool: ToolDef = {
         `总结: ${data.summary}\n` +
         `\n完整 JSON 供后续步骤使用：\n${text}`
       );
-    } catch {
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return "⏹️ 已被用户停止。";
       return text;
     }
   },

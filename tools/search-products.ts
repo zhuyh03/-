@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { ToolDef } from "./index.js";
+import { currentSignal } from "../agents/agent.js";
 
 function llm() {
   return new OpenAI({
@@ -39,7 +40,7 @@ export const searchProductsTool: ToolDef = {
       max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-    });
+    }, { signal: currentSignal });
 
     const text = res.choices[0]?.message?.content || "";
     try {
@@ -54,7 +55,10 @@ export const searchProductsTool: ToolDef = {
             `${p.rank}. [${p.platform}] ${p.name} — ${p.price} | 销量 ${p.sales} | ⭐${p.rating}`
         )
         .join("\n");
-    } catch {
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        return "⏹️ 已被用户停止。";
+      }
       return text.slice(0, 2000);
     }
   },

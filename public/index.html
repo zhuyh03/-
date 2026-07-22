@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🛒 电商导购 AI Agent</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1117; color: #e1e4e8; height: 100vh; display: flex; overflow: hidden; }
+
+/* ── 左面板 ────────────────────────────────────── */
+#left-panel {
+  width: 420px; min-width: 300px; max-width: 80vw; height: 100vh;
+  display: flex; flex-direction: column;
+  border-right: 1px solid #21262d; background: #161b22;
+}
+#header {
+  padding: 12px 20px; border-bottom: 1px solid #21262d;
+  font-size: 18px; font-weight: 700; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+#header .logo { display: flex; align-items: center; gap: 10px; }
+#header .logo span { font-size: 24px; }
+#header .actions { display: flex; gap: 6px; }
+#btn-stop, #btn-reset {
+  padding: 5px 12px; border-radius: 6px; border: 1px solid #30363d;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: .15s;
+  background: #21262d; color: #8b949e;
+}
+#btn-stop { display: none; }
+#btn-stop:hover { background: #da3633; color: #fff; border-color: #da3633; }
+#btn-reset:hover { background: #30363d; color: #e1e4e8; }
+
+#chat {
+  flex: 1 1 auto; overflow-y: auto; min-height: 80px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+#chat .msg {
+  padding: 12px 16px; border-radius: 12px;
+  max-width: 100%; line-height: 1.5; font-size: 14px;
+}
+#chat .msg.user { background: #1f6feb; align-self: flex-end; color: #fff; }
+#chat .msg.agent { background: #21262d; align-self: flex-start; color: #c9d1d9; }
+#chat .msg.question {
+  background: #1a2332; border: 1px solid #30363d; align-self: flex-start;
+}
+#chat .msg.question .q-item {
+  margin: 8px 0; padding: 6px 0; border-bottom: 1px solid #21262d;
+}
+#chat .msg.question .q-item:last-child { border-bottom: none; }
+#chat .msg.skip {
+  background: transparent; color: #8b949e; font-style: italic;
+  align-self: center; font-size: 13px;
+}
+
+#input-area {
+  padding: 12px 16px; border-top: 1px solid #21262d; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.upload-preview { display: flex; gap: 6px; flex-wrap: wrap; }
+.upload-preview .thumb {
+  width: 48px; height: 48px; border-radius: 6px; object-fit: cover;
+  border: 2px solid #30363d; cursor: pointer; position: relative;
+}
+.upload-preview .thumb:hover { border-color: #da3633; }
+.upload-preview .thumb .x {
+  position: absolute; top: -6px; right: -6px;
+  background: #da3633; color: #fff; border-radius: 50%;
+  width: 16px; height: 16px; font-size: 10px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+
+#input-area textarea {
+  width: 100%; flex: 1 1 auto; min-height: 68px;
+  background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+  color: #e1e4e8; padding: 10px 12px; font-size: 14px;
+  resize: none; outline: none; font-family: inherit;
+}
+#input-area textarea:focus { border-color: #1f6feb; }
+#input-area .bottom-row { display: flex; gap: 8px; align-items: center; }
+#input-area button {
+  padding: 8px 16px; border-radius: 8px; border: none;
+  font-size: 14px; font-weight: 600; cursor: pointer; transition: .15s;
+}
+#btn-send { background: #1f6feb; color: #fff; flex: 1; }
+#btn-send:hover { background: #388bfd; }
+#btn-send:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+#btn-reply { background: #238636; color: #fff; flex: 1; display: none; }
+#btn-reply:hover { background: #2ea043; }
+#btn-skip { background: #21262d; color: #8b949e; display: none; }
+#btn-skip:hover { background: #30363d; }
+#btn-upload {
+  background: #21262d; color: #8b949e; width: 36px; height: 36px;
+  padding: 0; border-radius: 8px; font-size: 18px; flex-shrink: 0;
+}
+#btn-upload:hover { background: #30363d; color: #e1e4e8; }
+#btn-upload.has-image { background: #1f6feb33; color: #58a6ff; border: 1px solid #1f6feb; }
+
+#img-count-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+#img-count-wrap label { font-size: 12px; color: #8b949e; white-space: nowrap; }
+#img-count {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  color: #e1e4e8; padding: 6px 8px; font-size: 13px; outline: none; width: 56px;
+}
+#img-count:focus { border-color: #1f6feb; }
+
+/* ── 右面板 ────────────────────────────────────── */
+#right-panel {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  background: #0d1117; overflow: hidden;
+}
+#right-header {
+  padding: 12px 20px; border-bottom: 1px solid #21262d;
+  font-size: 16px; font-weight: 600; flex-shrink: 0;
+}
+#progress {
+  flex: 1 1 0; overflow-y: auto; min-height: 0;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.tool-entry {
+  background: #161b22; border: 1px solid #21262d;
+  border-radius: 10px; overflow: hidden; flex-shrink: 0;
+}
+.tool-entry .tool-head {
+  padding: 10px 14px; background: #1c2128;
+  font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.tool-entry .tool-head:hover { background: #21262d; }
+.tool-entry .tool-head .tool-icon { font-size: 16px; }
+.tool-entry .tool-head .expand-arrow { font-size: 12px; color: #8b949e; transition: .2s; display: inline-block; }
+.tool-entry .tool-head .expand-arrow.open { transform: rotate(90deg); }
+.tool-entry .tool-body {
+  padding: 0 14px; font-size: 13px; color: #8b949e; line-height: 1.5;
+  max-height: 0; overflow: hidden; transition: max-height .25s;
+}
+.tool-entry .tool-body.open {
+  padding: 12px 14px; max-height: 400px; overflow-y: auto;
+}
+
+.image-card {
+  background: #161b22; border: 1px solid #21262d;
+  border-radius: 10px; overflow: hidden; flex-shrink: 0;
+}
+.image-card .img-head {
+  padding: 8px 14px; font-size: 13px; color: #8b949e; background: #1c2128;
+}
+.image-card img {
+  width: 100%; display: block; max-height: 400px; object-fit: contain;
+  background: #0d1117;
+}
+
+.status-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 12px;
+  font-size: 11px; font-weight: 600;
+}
+.status-badge.running { background: #1f6feb33; color: #58a6ff; }
+.status-badge.done { background: #23863633; color: #3fb950; }
+.status-badge.error { background: #da363333; color: #f85149; }
+
+.empty-state {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: #484f58; text-align: center; gap: 12px;
+}
+.empty-state .icon { font-size: 48px; }
+.empty-state .hint { font-size: 14px; line-height: 1.6; }
+
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #238636; color: #fff; padding: 10px 20px;
+  border-radius: 8px; font-size: 14px; font-weight: 600;
+  opacity: 0; transition: .3s; pointer-events: none; z-index: 10;
+}
+#toast.show { opacity: 1; }
+
+/* ── 可拖拽分隔条 ────────────────────────────────── */
+.splitter {
+  background: #21262d; position: relative; z-index: 5; flex-shrink: 0;
+  transition: background .15s;
+}
+.splitter:hover, .splitter.dragging { background: #1f6feb; }
+.splitter-v { width: 5px; cursor: col-resize; }
+.splitter-h { height: 5px; cursor: row-resize; }
+.splitter-v::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); width: 2px; height: 24px;
+  background: #484f58; border-radius: 2px;
+}
+.splitter-h::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); width: 24px; height: 2px;
+  background: #484f58; border-radius: 2px;
+}
+.splitter-v:hover::after, .splitter-h:hover::after { background: #fff; }
+</style>
+</head>
+<body>
+
+<div id="left-panel">
+  <div id="header">
+    <div class="logo"><span>🛒</span> 电商导购 Agent</div>
+    <div class="actions">
+      <button id="btn-stop" onclick="stopAgent()">⏹ 停止</button>
+      <button id="btn-reset" onclick="resetAll()">↺ 重置</button>
+    </div>
+  </div>
+  <div id="chat">
+    <div class="msg agent">👋 你好！输入你想做的产品，我来帮你选品分析 + 生成主图。</div>
+  </div>
+  <div class="splitter splitter-h" id="splitter-chat"></div>
+  <div id="input-area">
+    <div class="upload-preview" id="upload-preview"></div>
+    <textarea id="input" placeholder="例如：帮我为200-400元价位的蓝牙耳机做详情页..."></textarea>
+    <div class="bottom-row">
+      <div id="img-count-wrap">
+        <label for="img-count">生图数</label>
+        <select id="img-count">
+          <option value="0">自动</option>
+          <option value="1">1张</option>
+          <option value="2">2张</option>
+          <option value="3">3张</option>
+          <option value="4">4张</option>
+          <option value="5">5张</option>
+          <option value="6">6张</option>
+          <option value="7">7张</option>
+          <option value="8">8张</option>
+        </select>
+      </div>
+      <button id="btn-upload" onclick="document.getElementById('file-input').click()" title="上传参考图">📷</button>
+      <input type="file" id="file-input" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
+      <button id="btn-send" onclick="sendGoal()">发送</button>
+      <button id="btn-reply" onclick="sendAnswer()">回复</button>
+      <button id="btn-skip" onclick="skipQuestions()">跳过提问</button>
+    </div>
+  </div>
+</div>
+
+<div class="splitter splitter-v" id="splitter-panels"></div>
+
+<div id="right-panel">
+  <div id="right-header">📋 Agent 执行进度 <span style="color:#8b949e;font-weight:400;font-size:12px">— 点击展开/折叠，滚轮浏览</span></div>
+  <!-- 报告编辑面板（agent 发出 report_draft 事件时显示）-->
+  <div id="report-editor" style="display:none;flex-shrink:0;border-bottom:1px solid #21262d;padding:16px 20px;background:#161b22;flex-direction:column;gap:10px;max-height:45%;overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:600;font-size:15px;">📝 可直接编辑修改</span>
+      <button id="btn-confirm-report" onclick="confirmReport()" style="padding:6px 16px;background:#1f6feb;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px;">✅ 确认并继续</button>
+    </div>
+    <textarea id="report-textarea" style="flex:1;min-height:200px;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e1e4e8;padding:12px;font-size:14px;resize:vertical;font-family:inherit;line-height:1.6;outline:none;"></textarea>
+    <div style="font-size:12px;color:#8b949e">💡 你可以在上面直接修改产品名、价格、卖点、人群定位、竞品分析等内容，修改后点"确认并继续"生效。</div>
+  </div>
+  <div id="progress">
+    <div class="empty-state">
+      <div class="icon">🚀</div>
+      <div class="hint">在左边输入产品需求<br>Agent 的每一步决策会实时显示在这里</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const CLIENT_ID = 'c' + Math.random().toString(36).slice(2);
+const socket = io();
+
+// 注册 clientId
+socket.on("connect", () => {
+  socket.emit("register", CLIENT_ID);
+});
+
+const chat = document.getElementById("chat");
+const progress = document.getElementById("progress");
+const input = document.getElementById("input");
+const imgCount = document.getElementById("img-count");
+const btnSend = document.getElementById("btn-send");
+const btnReply = document.getElementById("btn-reply");
+const btnSkip = document.getElementById("btn-skip");
+const btnStop = document.getElementById("btn-stop");
+const btnUpload = document.getElementById("btn-upload");
+const uploadPreview = document.getElementById("upload-preview");
+const toast = document.getElementById("toast");
+
+let isRunning = false;
+let waitingForAnswer = false;
+let isFirstRun = true;
+let uploadedFiles = [];       // 已上传的文件名列表
+
+// ── 上传图片 ─────────────────────────────────────────
+async function handleFiles(files) {
+  if (!files || files.length === 0) return;
+  const formData = new FormData();
+  for (const f of files) {
+    formData.append("images", f);
+  }
+
+  try {
+    const res = await fetch("/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (data.filenames) {
+      uploadedFiles = [...uploadedFiles, ...data.filenames].slice(0, 3);
+      renderThumbnails();
+      btnUpload.classList.add("has-image");
+    }
+  } catch (e) {
+    showToast("❌ 上传失败");
+  }
+}
+
+function renderThumbnails() {
+  uploadPreview.innerHTML = uploadedFiles.map((f, i) =>
+    `<div class="thumb" style="position:relative" onclick="removeThumb(${i})">
+      <img src="/uploads/${f}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">
+      <div class="x">✕</div>
+    </div>`
+  ).join("");
+}
+
+function removeThumb(i) {
+  uploadedFiles.splice(i, 1);
+  renderThumbnails();
+  if (uploadedFiles.length === 0) btnUpload.classList.remove("has-image");
+}
+
+// ── 键盘事件 ─────────────────────────────────────────
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (waitingForAnswer) sendAnswer();
+    else if (!isRunning) sendGoal();
+  }
+});
+
+function sendGoal() {
+  if (isRunning) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  isRunning = true;
+  btnSend.style.display = "none";
+  btnStop.style.display = "inline-block";
+  if (isFirstRun) progress.innerHTML = "";
+
+  addChatMsg("user", text);
+  input.value = "";
+
+  const count = parseInt(imgCount.value) || 0;
+  const refImages = uploadedFiles.length > 0 ? [...uploadedFiles] : undefined;
+  // 发送后清空已上传图片（让用户知道图片已使用）
+  uploadedFiles = [];
+  renderThumbnails();
+  btnUpload.classList.remove("has-image");
+
+  if (isFirstRun) {
+    socket.emit("start", { goal: text, imageCount: count, refImages });
+    isFirstRun = false;
+  } else {
+    socket.emit("continue", { message: text, refImages });
+  }
+}
+
+function sendAnswer() {
+  if (!waitingForAnswer) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  waitingForAnswer = false;
+  btnReply.style.display = "none";
+  btnSkip.style.display = "none";
+  btnSend.style.display = "none";
+
+  addChatMsg("user", text);
+  const lines = text.split("\n").filter(l => l.trim());
+  socket.emit("answer", { answers: lines, skipped: false });
+  input.value = "";
+}
+
+function skipQuestions() {
+  if (waitingForAnswer) {
+    waitingForAnswer = false;
+    socket.emit("answer", { answers: [], skipped: true });
+    btnReply.style.display = "none";
+    btnSkip.style.display = "none";
+    btnSend.style.display = "none";
+    addChatMsg("skip", "⏭️ 已跳过，Agent 自主决策中...");
+    input.value = "";
+  }
+}
+
+function stopAgent() {
+  if (isRunning) {
+    socket.emit("stop");
+    addChatMsg("skip", "⏹️ 已停止。可以继续输入修改意见，或点 ↺ 重置。");
+    exitRunningMode();
+  }
+}
+
+function resetAll() {
+  if (isRunning) socket.emit("stop");
+  socket.emit("reset");
+  chat.innerHTML = '<div class="msg agent">👋 你好！输入你想做的产品，我来帮你选品分析 + 生成主图。</div>';
+  progress.innerHTML = `<div class="empty-state">
+    <div class="icon">🚀</div>
+    <div class="hint">在左边输入产品需求<br>Agent 的每一步决策会实时显示在这里</div>
+  </div>`;
+  uploadedFiles = [];
+  renderThumbnails();
+  btnUpload.classList.remove("has-image");
+  exitRunningMode();
+  isFirstRun = true;
+  input.value = "";
+  input.focus();
+  imgCount.value = "0";
+}
+
+function enterQAMode(questions) {
+  waitingForAnswer = true;
+  input.value = "";
+  input.placeholder = questions.length > 1
+    ? "请逐行回答每个问题（Shift+Enter 换行）..."
+    : "输入你的回答，按 Enter 发送...";
+  btnSend.style.display = "none";
+  btnReply.style.display = "block";
+  btnSkip.style.display = "block";
+  input.focus();
+}
+
+function enterRunningMode() {
+  isRunning = true;
+  waitingForAnswer = false;
+  btnSend.style.display = "none";
+  btnReply.style.display = "none";
+  btnSkip.style.display = "none";
+  btnStop.style.display = "inline-block";
+}
+
+function exitRunningMode() {
+  isRunning = false;
+  waitingForAnswer = false;
+  btnSend.style.display = "block";
+  btnReply.style.display = "none";
+  btnSkip.style.display = "none";
+  btnStop.style.display = "none";
+  input.placeholder = "继续输入修改意见，例如：把背景换成白色、价格改成99元...";
+  input.focus();
+}
+
+function addChatMsg(type, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + type;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addQuestionMsg(questions) {
+  const div = document.createElement("div");
+  div.className = "msg question";
+  div.innerHTML = "<strong>💬 Agent 想知道：</strong><br>" +
+    questions.map((q, i) => `<div class="q-item">Q${i+1}: ${q}</div>`).join("");
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addToolEntry(icon, name, bodyHtml, statusClass) {
+  const entry = document.createElement("div");
+  entry.className = "tool-entry";
+  const bodyId = "body-" + Math.random().toString(36).slice(2);
+  entry.innerHTML = `
+    <div class="tool-head" onclick="toggleBody('${bodyId}')">
+      <span><span class="tool-icon">${icon}</span> ${name}</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span class="status-badge ${statusClass}">${statusClass==="running"?"执行中":statusClass==="done"?"完成":"错误"}</span>
+        <span class="expand-arrow" id="arrow-${bodyId}">▶</span>
+      </span>
+    </div>
+    <div class="tool-body" id="${bodyId}"><pre style="margin:0;white-space:pre-wrap;font-family:inherit">${bodyHtml}</pre></div>`;
+  progress.appendChild(entry);
+  setTimeout(() => toggleBody(bodyId), 50);
+  progress.scrollTop = progress.scrollHeight;
+  return entry;
+}
+
+function addImageCard(filename) {
+  const card = document.createElement("div");
+  card.className = "image-card";
+  card.innerHTML = `
+    <div class="img-head">🖼️ ${filename}</div>
+    <img src="/images/${encodeURIComponent(filename)}" alt="${filename}" loading="lazy">`;
+  progress.appendChild(card);
+  progress.scrollTop = progress.scrollHeight;
+}
+
+function toggleBody(id) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById("arrow-" + id);
+  if (!body || !arrow) return;
+  if (body.classList.contains("open")) {
+    body.classList.remove("open");
+    arrow.classList.remove("open");
+  } else {
+    body.classList.add("open");
+    arrow.classList.add("open");
+    setTimeout(() => { progress.scrollTop = progress.scrollHeight; }, 150);
+  }
+}
+
+socket.on("agent_event", (evt) => {
+  switch (evt.type) {
+    case "message":
+      addChatMsg("agent", evt.text);
+      break;
+    case "tool_call":
+      enterRunningMode();
+      addToolEntry("🔧", evt.name,
+        evt.name === "ask_user" || evt.name === "present_report"
+          ? "等待用户操作..."
+          : JSON.stringify(evt.args, null, 2).slice(0, 400),
+        "running");
+      break;
+    case "tool_result":
+      addToolEntry("📋", "结果：" + evt.name, evt.preview, "done");
+      break;
+    case "question":
+      enterQAMode(evt.questions);
+      addQuestionMsg(evt.questions);
+      break;
+    case "report_draft":
+      showReportEditor(evt.content, "📝 选品报告 — 可直接编辑修改");
+      break;
+    case "visuals_draft":
+      showReportEditor(evt.content, "🎨 视觉方案 — 可直接编辑提示词");
+      break;
+    case "image":
+      addImageCard(evt.filename);
+      break;
+    case "done":
+      exitRunningMode();
+      if (evt.summary) addChatMsg("agent", evt.summary);
+      showToast("✅ Agent 完成 — 可继续对话修改");
+      break;
+    case "error":
+      addChatMsg("agent", "❌ 错误: " + evt.message);
+      exitRunningMode();
+      showToast("❌ " + evt.message);
+      break;
+  }
+});
+
+// ── 报告编辑面板 ─────────────────────────────────────
+function showReportEditor(content, title) {
+  const editor = document.getElementById("report-editor");
+  const textarea = document.getElementById("report-textarea");
+  const titleEl = editor.querySelector("span");
+  if (titleEl) titleEl.textContent = title || "📝 可直接编辑修改";
+  textarea.value = content;
+  editor.style.display = "flex";
+  // 滚动到顶部让用户看到编辑面板
+  editor.scrollIntoView({ behavior: "smooth" });
+  addChatMsg("agent", "✍️ 方案草稿已生成，请在右侧面板编辑确认后再继续。");
+}
+
+function confirmReport() {
+  const textarea = document.getElementById("report-textarea");
+  const edited = textarea.value.trim();
+  if (!edited) return;
+  document.getElementById("report-editor").style.display = "none";
+  socket.emit("report_confirm", { confirmed: true, edited_report: edited });
+  addChatMsg("user", "✅ 报告已确认，继续生图...");
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2500);
+}
+
+input.focus();
+
+// ── 可拖拽分隔条 ─────────────────────────────────────
+function makeSplitter(splitterId, onDrag) {
+  const splitter = document.getElementById(splitterId);
+  let dragging = false;
+  splitter.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    dragging = true;
+    splitter.classList.add("dragging");
+    document.body.style.cursor = splitter.classList.contains("splitter-v") ? "col-resize" : "row-resize";
+    document.body.style.userSelect = "none";
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    onDrag(e);
+  });
+  document.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove("dragging");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  });
+}
+
+// 左右面板：竖向拖动调整 left-panel 宽度
+makeSplitter("splitter-panels", (e) => {
+  const left = document.getElementById("left-panel");
+  const newW = e.clientX;
+  const minW = 300, maxW = window.innerWidth * 0.8;
+  left.style.width = Math.max(minW, Math.min(maxW, newW)) + "px";
+});
+
+// 对话框/输入区：横向拖动调整输入区高度（textarea 跟着变大）
+makeSplitter("splitter-chat", (e) => {
+  const inputArea = document.getElementById("input-area");
+  // 鼠标到窗口底部的距离 = 输入区目标高度
+  const newH = window.innerHeight - e.clientY;
+  const naturalH = 140;                  // 输入区自然高度（按钮行 + 一行 textarea + padding）
+  const maxH = window.innerHeight - 120; // 最大：给对话历史留至少 120px
+  if (newH <= naturalH) {
+    // 拖到最低：清除显式高度，恢复原始自然布局，按钮行不再下沉
+    inputArea.style.height = "";
+  } else {
+    inputArea.style.height = Math.min(maxH, newH) + "px";
+  }
+});
+</script>
+</body>
+</html>

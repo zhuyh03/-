@@ -4,6 +4,8 @@ import { askUserTool } from "./ask-user.js";
 import { analyzeMarketTool } from "./analyze-market.js";
 import { designVisualsTool } from "./design-visuals.js";
 import { designDetailPageTool } from "./design-detail-page.js";
+import { presentReportTool } from "./present-report.js";
+import { combineDetailPageTool } from "./combine-detail-page.js";
 import { generateImageTool } from "./generate-image.js";
 import { saveReportTool } from "./save-report.js";
 
@@ -19,7 +21,9 @@ export const ALL_TOOLS: ToolDef[] = [
   askUserTool,
   analyzeMarketTool,
   designVisualsTool,
+  presentReportTool,
   designDetailPageTool,
+  combineDetailPageTool,
   generateImageTool,
   saveReportTool,
 ];

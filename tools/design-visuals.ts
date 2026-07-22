@@ -1,5 +1,7 @@
 import OpenAI from "openai";
 import type { ToolDef } from "./index.js";
+import { currentSignal } from "../agents/agent.js";
+import { GlobalCallbacks } from "./callbacks.js";
 
 function llm() {
   return new OpenAI({
@@ -11,7 +13,7 @@ function llm() {
 export const designVisualsTool: ToolDef = {
   name: "design_visuals",
   description:
-    "为选定产品设计电商主图方案，生成 5 张不同场景类型（lifestyle/studio/comparison/detail/banner）的英文 Prompt。在选品分析完成后使用。",
+    "为选定产品设计电商主图方案，生成 5 张不同场景类型的 Prompt。工具返回方案草稿，并等待用户在界面中确认/修改后，再将最终方案返回给你。",
   parameters: {
     type: "object",
     properties: {
@@ -41,29 +43,45 @@ export const designVisualsTool: ToolDef = {
       "prompt": "英文AI绘图Prompt（60-120词，含构图/光影/材质/情绪/相机参数）",
       "negative_prompt": "英文负面提示词",
       "aspect_ratio": "1:1"
-    }...
+    }
   ]
 }`;
 
-    const res = await llm().chat.completions.create({
-      model: process.env.TEXT_MODEL || "gpt-4o",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-    });
+    let text = "";
+    try {
+      const res = await llm().chat.completions.create({
+        model: process.env.TEXT_MODEL || "gpt-4o",
+        max_tokens: 4096,
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      }, { signal: currentSignal });
 
-    const text = res.choices[0]?.message?.content || "";
+      text = res.choices[0]?.message?.content || "";
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return "⏹️ 已被用户停止。";
+      throw e;
+    }
+
+    // 格式化出清晰易读的纯文本给用户编辑
+    let draftForUser = text;
     try {
       const data = JSON.parse(text);
-      const imgs = (data.images || []).map(
-        (img: { scene_type: string; scene_description: string; prompt: string }, i: number) =>
-          `  图${i + 1} [${img.scene_type}]: ${img.scene_description}\n    Prompt: ${img.prompt?.slice(0, 120)}...`
-      );
-      return (
-        `🎨 视觉方案：${data.visual_strategy}\n\n图片方案：\n${imgs.join("\n\n")}\n\n完整 JSON：\n${text}`
-      );
+      const parts = [`🎨 视觉策略：${data.visual_strategy || ""}\n`];
+      for (let i = 0; i < (data.images || []).length; i++) {
+        const img = data.images[i];
+        parts.push(`【图${i + 1} - ${img.scene_type}】\n描述：${img.scene_description}\nPrompt：${img.prompt}\n`);
+      }
+      draftForUser = parts.join("\n");
     } catch {
-      return text;
+      // JSON 解析失败则使用原始文本
     }
+
+    if (!GlobalCallbacks.visualsDraft) {
+      return "✅ 视觉方案已生成：\n\n" + draftForUser + "\n\n(原始JSON数据附后)\n" + text;
+    }
+
+    const editedDraft = await GlobalCallbacks.visualsDraft(draftForUser);
+
+    return "✅ 以下是用户确认并修改后的视觉方案。请严格按照这个编辑后的方案内容提取 Prompt 调用 generate_image：\n\n" + editedDraft;
   },
 };

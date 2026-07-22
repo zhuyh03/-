@@ -24,23 +24,22 @@ $ npm start "帮我为200-400元价位的蓝牙耳机做详情页"
 
 ## 快速开始
 
+### Web 界面（推荐）
+
 ```bash
-# 1. 克隆
-git clone https://github.com/yourname/ecommerce-agent.git
-cd ecommerce-agent
-
-# 2. 安装
 npm install
-
-# 3. 配置 API Key
-cp .env.example .env
-# 编辑 .env，填入你的 ONEAPI_API_KEY
-
-# 4. 运行
-npm start "帮我为夏季防晒用品做电商选品和主图"
+cp .env.example .env   # 编辑填入 ONEAPI_API_KEY
+npm run web            # 启动服务器
+# 浏览器打开 http://localhost:3000
 ```
 
-Agent 运行时会主动向你提问，在终端直接回答即可。输入 `skip` 跳过让 Agent 自主决策。
+左边输入需求，右边实时看 Agent 每一步决策和生成的图片。
+
+### 命令行
+
+```bash
+npm start "帮我为夏季防晒用品做电商选品和主图"
+```
 
 ## 它能做什么
 

@@ -4,14 +4,22 @@
   "description": "电商导购 AI Agent — Tool-Use Loop 自主决策选品 + 主图生成",
   "type": "module",
   "scripts": {
-    "start": "npx tsx main.ts"
+    "start": "npx tsx main.ts",
+    "web": "npx tsx server.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "openai": "^6.47.0"
+    "express": "^4.22.2",
+    "multer": "^2.2.0",
+    "openai": "^6.47.0",
+    "sharp": "^0.35.3",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.9.0",
+    "@types/sharp": "^0.31.1",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3"
   }

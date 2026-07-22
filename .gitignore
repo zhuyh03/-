@@ -3,6 +3,7 @@ dist/
 .env
 storage/images/*
 storage/reports/*
+storage/uploads/*
 !storage/images/.gitkeep
 !storage/reports/.gitkeep
 *.log
